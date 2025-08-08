@@ -19,6 +19,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.herzog.trading.trade_ml_service.model.MarketDataModel;
+
+import jakarta.annotation.PostConstruct;
 /**
  * Service to fetch market data from Alpaca API.
  * This service retrieves stock bars for a specified symbol and timeframe,
@@ -30,42 +32,48 @@ import com.herzog.trading.trade_ml_service.model.MarketDataModel;
 @Service
 public class MarketDataService {
 
-    @Value("${alpaca.api.key.id}")
+    @Value("${alpaca.api.key}")
     private String keyID;
 
     @Value("${alpaca.api.secret.key}")
     private String secretKey;
 
     @Value("${alpaca.api.symbol}")
-    private String symbol; //stock symbol
+    private String symbol;
 
+    @PostConstruct
+    public void init() {
+        this.alpacaAPI = new AlpacaAPI(keyID, secretKey, TraderAPIEndpointType.PAPER, MarketDataWebsocketSourceType.IEX);
+        fetchMarketData();
+    }
 
     private AlpacaAPI alpacaAPI;
 
-    private final List<MarketDataModel> marketDataList = new ArrayList<>();
+    private List<MarketDataModel> marketDataList;
 
     public MarketDataService() {
         // Initialize Alpaca API with credentials and endpoint type
-        this.alpacaAPI = new AlpacaAPI(keyID, secretKey, TraderAPIEndpointType.PAPER, MarketDataWebsocketSourceType.IEX);
+        //this.alpacaAPI = new AlpacaAPI(keyID, secretKey, TraderAPIEndpointType.PAPER, MarketDataWebsocketSourceType.IEX);
+        //fetchMarketData();
     }
 
     public void fetchMarketData() {
 
         // Define the parameters for the stock bars request
             //String symbol = "AAPL"; // Stock symbol (e.g., Apple)
-            String timeframe = "1Min"; // Timeframe for the bar (1 minute)
+            String timeframe = "5Min"; // Timeframe for the 
            // OffsetDateTime start = OffsetDateTime.of(2025, 8, 5, 9, 30, 0, 0, ZoneOffset.UTC); // Start time
             //OffsetDateTime end = OffsetDateTime.of(2025, 8, 5, 16, 0, 0, 0, ZoneOffset.UTC); // End time
             OffsetDateTime end = OffsetDateTime.now(ZoneOffset.UTC); // Current time in UTC
             OffsetDateTime start = end.minusHours(4); // 4 hours ago from current time
-            Long limit = 50L; // Limit on number of bars to retrieve
+            Long limit = 10L; // Limit on number of bars to retrieve
             StockAdjustment adjustment = StockAdjustment.RAW; // No dividend/split adjustments
-            String pageToken = null; // For pagination, null for first request
+            String pageToken =  null; // For pagination, null for first request
             StockFeed feed = StockFeed.IEX; // Data feed 
             String exchange = null; // Specific exchange (null for all)
             String currency = "USD"; // Currency for the data
             Sort sort = Sort.ASC; // Sort order (ascending)
- 
+  
 
         // Retrieve stock bars
         try {
@@ -75,19 +83,18 @@ public class MarketDataService {
                 end,
                 limit,
                 adjustment,
-                pageToken,
-                feed,
                 exchange,
+                feed,
                 currency,
+                pageToken,
                 sort);
-
+            marketDataList = new ArrayList<MarketDataModel>();
            for(StockBar bar : bars.getBars()){
-                System.out.println("bar high: " + bar.getH());
-                System.out.println("bar low: " + bar.getL());
-                System.out.println("bar open: " + bar.getO());
-                System.out.println("bar close: " + bar.getC());
-                System.out.println("bar volume: " + bar.getV());
-                System.out.println("bar timestamp: " + bar.getT());
+                MarketDataModel marketData = new MarketDataModel();
+                marketData.setSymbol(symbol);
+                marketData.setPrice(bar.getC());
+                marketData.setVolume(bar.getV());
+                marketData.setTimestamp(bar.getT().toInstant());
            }
             
         } catch (ApiException e) {
